@@ -84,4 +84,28 @@ EXIT_CODE=$?
 python -m crs_normalize.action --report "${REPORT_PATH}" --exit-code "${EXIT_CODE}" ||
   echo "::warning title=crs-normalize::Could not write Action outputs."
 
+# A Docker container action runs as root, so everything written above lands
+# root-owned. Subsequent workflow steps run as the runner user, and the
+# fix-and-commit pattern in the README needs to stage and commit these files,
+# which fails against root ownership. Hand them back to whoever owns the
+# workspace. Best-effort only: this must never change the verdict.
+restore_ownership() {
+  local ref="/github/workspace"
+  [[ -d "${ref}" ]] || return 0
+
+  chown -R --reference="${ref}" "${REPORT_PATH}" 2>/dev/null || true
+  if [[ -n "${OUTPUT_DIR}" && -e "${OUTPUT_DIR}" ]]; then
+    chown -R --reference="${ref}" "${OUTPUT_DIR}" 2>/dev/null || true
+  fi
+
+  # 'fix' without an output dir rewrites datasets in place, and the paths input
+  # may hold unexpanded globs, so the touched set is not enumerable here.
+  # Reassert ownership across the workspace instead.
+  if [[ "${MODE}" == "fix" && -z "${OUTPUT_DIR}" ]]; then
+    chown -R --reference="${ref}" "${ref}" 2>/dev/null || true
+  fi
+  return 0
+}
+restore_ownership
+
 exit "${EXIT_CODE}"

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "crs-normalize-action"
-version = "1.0.0"
+version = "1.0.1"
 description = "Detect and fix mixed or missing coordinate reference systems in spatial datasets, in CI or on the command line."
 readme = "README.md"
 license = { file = "LICENSE" }

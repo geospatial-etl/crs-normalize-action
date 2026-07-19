@@ -35,3 +35,6 @@ crs-summary.md
 .vscode/
 *.swp
 .DS_Store
+
+# Docker smoke-test scratch workspace
+.docker-smoke/

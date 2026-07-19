@@ -310,6 +310,22 @@ pytest
 Tests build synthetic GeoPackages and GeoTIFFs on the fly, so there are no binary fixtures in the
 repository.
 
+The unit suite exercises the Python package directly. To test the packaged Action — the image build,
+the positional arguments `action.yml` passes to `entrypoint.sh`, and the files written back into the
+workspace — run the container smoke test, which needs a working Docker daemon:
+
+```bash
+scripts/docker-smoke-test.sh
+```
+
+It builds the image, drives it the way the runner does with the workspace bind-mounted at
+`/github/workspace`, and asserts the whole exit-code matrix, the four Action outputs, the job
+summary, and that written files are left owned by the workspace owner rather than by root.
+
+Set `DOCKER` if your user cannot reach the daemon directly, for example `DOCKER="sudo docker"`. The
+scratch workspace defaults to `.docker-smoke/` beside the repository; override it with `WORK_ROOT` if
+that path is not visible to the daemon.
+
 ## Further reading
 
 Background on the problems this Action gates against:
