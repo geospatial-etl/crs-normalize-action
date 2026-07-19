@@ -43,6 +43,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The fixture generator runs on the runner rather than inside the Action
+      # image, so it needs its own copy of the geospatial stack. The Action
+      # under test brings its own dependencies in the container.
+      - name: Install fixture dependencies
+        run: pip install geopandas rasterio
+
       - name: Generate fixtures
         run: python .github/scripts/make_fixtures.py clean fixtures
 
@@ -67,6 +77,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The fixture generator runs on the runner rather than inside the Action
+      # image, so it needs its own copy of the geospatial stack. The Action
+      # under test brings its own dependencies in the container.
+      - name: Install fixture dependencies
+        run: pip install geopandas rasterio
 
       - name: Generate fixtures
         run: python .github/scripts/make_fixtures.py mixed fixtures
@@ -94,6 +114,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The fixture generator runs on the runner rather than inside the Action
+      # image, so it needs its own copy of the geospatial stack. The Action
+      # under test brings its own dependencies in the container.
+      - name: Install fixture dependencies
+        run: pip install geopandas rasterio
+
       - name: Generate fixtures
         run: python .github/scripts/make_fixtures.py missing fixtures
 
@@ -116,6 +146,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The fixture generator runs on the runner rather than inside the Action
+      # image, so it needs its own copy of the geospatial stack. The Action
+      # under test brings its own dependencies in the container.
+      - name: Install fixture dependencies
+        run: pip install geopandas rasterio
 
       - name: Generate fixtures
         run: python .github/scripts/make_fixtures.py mixed fixtures
