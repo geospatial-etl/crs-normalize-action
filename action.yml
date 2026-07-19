@@ -1,0 +1,130 @@
+name: "CRS Normalize"
+description: >-
+  Scan spatial datasets for mixed or missing coordinate reference systems,
+  optionally reproject them onto a single target CRS, and fail the build on
+  cases that cannot be resolved safely.
+author: "Geospatial ETL"
+
+branding:
+  icon: "globe"
+  color: "blue"
+
+inputs:
+  paths:
+    description: >-
+      Whitespace- or newline-separated files, directories or globs to inspect.
+      Directories are walked recursively. Recursive globs such as
+      'data/**/*.shp' are supported.
+    required: false
+    default: "."
+
+  target-crs:
+    description: >-
+      CRS every dataset should end up in, for example 'EPSG:3857'. Required
+      when mode is 'fix'. In 'check' mode it is optional: without it the Action
+      reports which CRSs are present, and with it the Action additionally
+      verifies that every source CRS can actually reach the target.
+    required: false
+    default: ""
+
+  assume-crs:
+    description: >-
+      CRS to attribute to datasets that declare none, for example 'EPSG:4326'.
+      Leave empty to treat a missing CRS as unresolvable, which is the safe
+      default: guessing wrong silently relocates the data.
+    required: false
+    default: ""
+
+  mode:
+    description: >-
+      'check' inspects and reports without writing anything. 'fix' reprojects
+      resolvable datasets onto target-crs. Datasets carrying an unresolvable
+      problem are never rewritten in either mode.
+    required: false
+    default: "check"
+
+  fail-on:
+    description: >-
+      Which findings fail the job. 'unresolvable' (default) fails only on
+      problems this Action cannot fix for you. 'mixed' additionally fails when
+      datasets merely disagree on CRS. 'never' always succeeds and reports only.
+    required: false
+    default: "unresolvable"
+
+  resampling:
+    description: >-
+      Raster resampling method used when warping: nearest, bilinear, cubic,
+      cubic_spline, lanczos, average, mode, max, min, med, q1 or q3. Use
+      'nearest' or 'mode' for categorical rasters to avoid inventing values.
+    required: false
+    default: "nearest"
+
+  max-transform-error:
+    description: >-
+      Fail when the coordinate operation PROJ selects declares an accuracy
+      worse than this many metres. Leave empty to accept any accuracy.
+    required: false
+    default: ""
+
+  output-dir:
+    description: >-
+      Write reprojected datasets here, mirroring the input directory structure,
+      instead of rewriting them in place. Only meaningful when mode is 'fix'.
+    required: false
+    default: ""
+
+  comment-on-pr:
+    description: >-
+      Post the report as a sticky pull request comment, updating the previous
+      one instead of adding a new comment on every push. Requires github-token
+      with 'pull-requests: write'. Degrades to a no-op without it.
+    required: false
+    default: "false"
+
+  summary:
+    description: >-
+      Write the report to the job summary shown on the workflow run page.
+    required: false
+    default: "true"
+
+  report-path:
+    description: "Where to write the machine-readable JSON report."
+    required: false
+    default: "crs-report.json"
+
+  github-token:
+    description: >-
+      Token used to post the pull request comment. Only needed when
+      comment-on-pr is true.
+    required: false
+    default: ""
+
+outputs:
+  status:
+    description: "'clean', 'changed', 'failed' or 'error'."
+  files-scanned:
+    description: "Number of datasets discovered and inspected."
+  files-changed:
+    description: "Number of datasets reprojected. Always 0 in check mode."
+  crs-histogram:
+    description: "JSON object mapping each CRS found to the number of datasets using it."
+  report-path:
+    description: "Path to the JSON report written by this run."
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  args:
+    - ${{ inputs.paths }}
+    - ${{ inputs.target-crs }}
+    - ${{ inputs.assume-crs }}
+    - ${{ inputs.mode }}
+    - ${{ inputs.fail-on }}
+    - ${{ inputs.resampling }}
+    - ${{ inputs.max-transform-error }}
+    - ${{ inputs.output-dir }}
+    - ${{ inputs.comment-on-pr }}
+    - ${{ inputs.summary }}
+    - ${{ inputs.report-path }}
+  env:
+    GITHUB_TOKEN: ${{ inputs.github-token }}

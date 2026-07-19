@@ -1,0 +1,69 @@
+# Reproject datasets in place and open a pull request with the result.
+#
+# Runs in fix mode against the default branch on a schedule and on demand.
+# Datasets carrying an unresolvable problem (missing CRS, no transformation
+# path, a missing datum-shift grid, a rotated raster) are never rewritten on a
+# guess, so a green run here means every change was safe to make.
+#
+# Copy to .github/workflows/crs-fix.yml in your repository.
+
+name: CRS fix
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays, 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      target-crs:
+        description: "CRS to normalize everything to"
+        required: false
+        default: "EPSG:4326"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix:
+    name: Normalize CRS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Normalize CRS in place
+        id: crs
+        # Exit code 2 means files changed, which is the outcome we want to act
+        # on rather than treat as a failure.
+        continue-on-error: true
+        uses: geospatial-etl/crs-normalize-action@v1
+        with:
+          paths: data
+          target-crs: ${{ inputs.target-crs || 'EPSG:4326' }}
+          mode: fix
+          # Categorical rasters must not be interpolated; use bilinear or cubic
+          # only for continuous surfaces such as elevation.
+          resampling: nearest
+          # Refuse any datum shift declared as worse than one metre.
+          max-transform-error: "1.0"
+          fail-on: unresolvable
+
+      - name: Stop if anything was unresolvable
+        if: steps.crs.outputs.status == 'failed'
+        run: |
+          echo "Some datasets could not be normalized safely. See the job summary."
+          exit 1
+
+      - name: Open a pull request with the reprojected data
+        if: steps.crs.outputs.status == 'changed'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: automated/crs-normalize
+          delete-branch: true
+          title: "Normalize CRS to ${{ inputs.target-crs || 'EPSG:4326' }}"
+          commit-message: "Normalize CRS to ${{ inputs.target-crs || 'EPSG:4326' }}"
+          body: |
+            Automated reprojection of ${{ steps.crs.outputs.files-changed }} dataset(s).
+
+            CRS present before this change: `${{ steps.crs.outputs.crs-histogram }}`
+
+            Datasets with unresolvable CRS problems were left untouched.

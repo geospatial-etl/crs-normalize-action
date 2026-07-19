@@ -1,0 +1,65 @@
+# Check several data directories independently, each with its own target CRS.
+#
+# Useful when a repository holds datasets that legitimately live in different
+# projections: a national grid for analysis, web mercator for tiles, and so on.
+# A single global target would be wrong, so each directory declares its own and
+# is checked in a separate job.
+#
+# Copy to .github/workflows/crs-matrix.yml in your repository.
+
+name: CRS check (matrix)
+
+on:
+  pull_request:
+    paths: ["data/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crs:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Analysis layers (British National Grid)
+            path: data/analysis
+            crs: EPSG:27700
+            # OSGB36 datum shifts are only accurate to a few metres without
+            # the OSTN15 grid, so allow for that here.
+            max-error: "5.0"
+
+          - name: Web tiles (Pseudo-Mercator)
+            path: data/tiles
+            crs: EPSG:3857
+            max-error: "1.0"
+
+          - name: Raw ingest (WGS 84)
+            path: data/raw
+            crs: EPSG:4326
+            max-error: "1.0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check ${{ matrix.path }}
+        id: crs
+        uses: geospatial-etl/crs-normalize-action@v1
+        with:
+          paths: ${{ matrix.path }}
+          target-crs: ${{ matrix.crs }}
+          mode: check
+          fail-on: mixed
+          max-transform-error: ${{ matrix.max-error }}
+          report-path: crs-report-${{ strategy.job-index }}.json
+
+      - name: Summarise
+        if: always()
+        run: |
+          echo "${{ matrix.path }} -> ${{ matrix.crs }}"
+          echo "Status:    ${{ steps.crs.outputs.status }}"
+          echo "Scanned:   ${{ steps.crs.outputs.files-scanned }}"
+          echo "Histogram: ${{ steps.crs.outputs.crs-histogram }}"

@@ -1,0 +1,137 @@
+name: Self test
+
+# Exercises the Action against fixtures generated in this repository, so that
+# the packaged Docker image, the entrypoint argument wiring and the exit codes
+# are all covered end to end rather than only at the Python level.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: pytest -v
+
+  action-clean:
+    name: Action passes on single-CRS fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate fixtures
+        run: python .github/scripts/make_fixtures.py clean fixtures
+
+      - name: Run the Action
+        id: crs
+        uses: ./
+        with:
+          paths: fixtures
+          target-crs: EPSG:4326
+          mode: check
+          fail-on: mixed
+
+      - name: Assert outputs
+        run: |
+          test "${{ steps.crs.outputs.status }}" = "clean"
+          test "${{ steps.crs.outputs.files-scanned }}" = "2"
+          test "${{ steps.crs.outputs.files-changed }}" = "0"
+          echo "Histogram: ${{ steps.crs.outputs.crs-histogram }}"
+
+  action-detects-mixed:
+    name: Action fails on mixed CRS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate fixtures
+        run: python .github/scripts/make_fixtures.py mixed fixtures
+
+      - name: Run the Action (expected to fail)
+        id: crs
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: fixtures
+          mode: check
+          fail-on: mixed
+
+      - name: Assert the run failed for the right reason
+        run: |
+          if [ "${{ steps.crs.outcome }}" != "failure" ]; then
+            echo "Expected the Action to fail on mixed CRS."
+            exit 1
+          fi
+          test "${{ steps.crs.outputs.status }}" = "failed"
+
+  action-detects-missing-crs:
+    name: Action fails on missing CRS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate fixtures
+        run: python .github/scripts/make_fixtures.py missing fixtures
+
+      - name: Run the Action (expected to fail)
+        id: crs
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: fixtures
+          target-crs: EPSG:3857
+          mode: check
+
+      - name: Assert the run failed
+        run: |
+          test "${{ steps.crs.outcome }}" = "failure"
+          test "${{ steps.crs.outputs.status }}" = "failed"
+
+  action-fixes:
+    name: Action reprojects in fix mode
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate fixtures
+        run: python .github/scripts/make_fixtures.py mixed fixtures
+
+      - name: Run the Action
+        id: crs
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: fixtures
+          target-crs: EPSG:3857
+          mode: fix
+          output-dir: normalized
+          resampling: bilinear
+
+      - name: Assert everything landed in the target CRS
+        run: |
+          test "${{ steps.crs.outputs.status }}" = "changed"
+          python .github/scripts/make_fixtures.py assert-crs normalized EPSG:3857

@@ -1,0 +1,54 @@
+# Gate pull requests on CRS hygiene.
+#
+# Runs in check mode, so nothing is ever rewritten. Problems appear as inline
+# annotations on the changed files, as a job summary, and as a single sticky
+# pull request comment that is updated in place on every push.
+#
+# Copy to .github/workflows/crs-check.yml in your repository.
+
+name: CRS check
+
+on:
+  pull_request:
+    paths:
+      - "data/**"
+      - ".github/workflows/crs-check.yml"
+
+permissions:
+  contents: read
+  pull-requests: write # only needed for comment-on-pr
+
+jobs:
+  crs:
+    name: Check coordinate reference systems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check CRS
+        id: crs
+        uses: geospatial-etl/crs-normalize-action@v1
+        with:
+          paths: data
+          target-crs: EPSG:4326
+          mode: check
+          # Fail when datasets disagree on CRS, not only when a dataset is
+          # unfixable. Drop to 'unresolvable' if a mixed repository is expected.
+          fail-on: mixed
+          comment-on-pr: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show what was found
+        if: always()
+        run: |
+          echo "Status:        ${{ steps.crs.outputs.status }}"
+          echo "Files scanned: ${{ steps.crs.outputs.files-scanned }}"
+          echo "CRS histogram: ${{ steps.crs.outputs.crs-histogram }}"
+
+      - name: Keep the report as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crs-report
+          path: ${{ steps.crs.outputs.report-path }}
+          if-no-files-found: ignore
